@@ -62,6 +62,7 @@ import {
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { useRouter } from "next/navigation";
 
 interface Section {
   id: string;
@@ -391,7 +392,7 @@ export default function Dashboard() {
   const [sections, setSections] = React.useState<Section[]>([]);
   const [isAddingSection, setIsAddingSection] = React.useState(false);
   const [newSectionTitle, setNewSectionTitle] = React.useState("");
-
+  const router = useRouter();
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -455,6 +456,10 @@ export default function Dashboard() {
     setIsAddingSection(false);
   };
 
+  const handleSignIn = () => {
+    router.push("/signin");
+  }
+
   return (
     <div className="flex h-screen bg-[#1E1F21]">
       <div className="hidden w-64 border-r border-[#424244] bg-[#2e2e30] lg:block">
@@ -517,12 +522,14 @@ export default function Dashboard() {
             <Button variant="ghost" size="icon" className="text-[#9CA6AF]">
               <Settings className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="icon" className="text-[#9CA6AF]">
+            <Button variant="ghost" size="icon" className="text-[#9CA6AF]"
+            onClick={handleSignIn}
+            >
               <Users className="h-4 w-4" />
             </Button>
           </div>
         </header>
-        <div className="flex items-center gap-4 border-b border-[#424244] px-4 py-2">
+        {/* <div className="flex items-center gap-4 border-b border-[#424244] px-4 py-2">
           <Button variant="ghost" className="text-[#9CA6AF]">
             List
           </Button>
@@ -536,12 +543,12 @@ export default function Dashboard() {
             Files
           </Button>
           <Plus className="h-4 w-4 text-[#9CA6AF]" />
-        </div>
+        </div> */}
         <div className="flex items-center gap-4 border-b border-[#424244] p-4">
-          <Button className="bg-[#4573D2] text-white hover:bg-[#4573D2]/90">
+          {/* <Button className="bg-[#4573D2] text-white hover:bg-[#4573D2]/90">
             Add task
             <ChevronDown className="ml-2 h-4 w-4" />
-          </Button>
+          </Button> */}
           <div className="ml-auto flex items-center gap-2">
             <Button variant="ghost" className="text-[#9CA6AF]">
               Filter
