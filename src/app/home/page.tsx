@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import {
@@ -43,6 +42,8 @@ import {
   Settings,
   Users,
   X,
+  FileText,
+  FolderKanban,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import Link from "next/link";
@@ -85,6 +86,8 @@ import HomePage from "@/components/screens/HomePage";
 import InboxPage from "@/components/screens/InboxPage";
 import { ThemeProvider, useTheme } from "@/components/themeprovider";
 import { useRouter } from "next/navigation";
+import { TaskList } from "@/components/task-list";
+
 interface Section {
   id: string;
   title: string;
@@ -107,11 +110,13 @@ interface Collaborator {
   avatar: string;
 }
 
-interface FieldOption {
+interface Field {
   id: string;
   name: string;
   icon: React.ReactNode;
   enabled: boolean;
+  width?: string;
+  key: keyof Task;
 }
 
 const collaborators: Collaborator[] = [
@@ -122,19 +127,225 @@ const collaborators: Collaborator[] = [
 
 const projects = ["Marketing", "Development", "Design"];
 
+const initialFields: Field[] = [
+  {
+    id: "taskName",
+    name: "Task name",
+    icon: <FileText className="h-5 w-5" />,
+    enabled: true,
+    width: "1fr",
+    key: "title",
+  },
+  {
+    id: "dueDate",
+    name: "Due date",
+    icon: <Calendar className="h-5 w-5" />,
+    enabled: true,
+    width: "150px",
+    key: "dueDate",
+  },
+  {
+    id: "collaborators",
+    name: "Collaborators",
+    icon: <Users className="h-5 w-5" />,
+    enabled: true,
+    width: "150px",
+    key: "collaborators",
+  },
+  {
+    id: "project",
+    name: "Projects",
+    icon: <FolderKanban className="h-5 w-5" />,
+    enabled: true,
+    width: "150px",
+    key: "project",
+  },
+  {
+    id: "visibility",
+    name: "Task visibility",
+    icon: <Eye className="h-5 w-5" />,
+    enabled: true,
+    width: "100px",
+    key: "isPrivate",
+  },
+];
+
+function getGridTemplateColumns(fields: Field[]) {
+  const enabledFields = fields.filter((field) => field.enabled);
+  return `24px ${enabledFields.map((field) => field.width).join(" ")}`;
+}
+
 function SortableTask({
   task,
   onUpdate,
+  fields,
 }: {
   task: Task;
   onUpdate: (updatedTask: Task) => void;
+  fields: Field[];
 }) {
   const { attributes, listeners, setNodeRef, transform, transition } =
     useSortable({ id: task.id });
+  const { theme } = useTheme();
 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
+    display: "grid",
+    gridTemplateColumns: getGridTemplateColumns(fields),
+    gap: "1rem",
+    alignItems: "center",
+  };
+
+  const renderField = (field: Field) => {
+    switch (field.key) {
+      case "title":
+        return (
+          <label
+            htmlFor={`task-${task.id}`}
+            className={`cursor-pointer ${theme === "light" ? "text-gray-900" : "text-white"}`}
+          >
+            {task.title}
+          </label>
+        );
+      case "dueDate":
+        return (
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className={`w-full justify-start p-0 ${theme === "light" ? "text-gray-700 hover:text-gray-900" : "text-[#9CA6AF] hover:text-white"}`}
+              >
+                {task.dueDate ? task.dueDate.toLocaleDateString() : "No date"}
+                <Calendar className="ml-auto h-4 w-4 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <CalendarComponent
+                mode="single"
+                selected={task.dueDate || undefined}
+                onSelect={(date) =>
+                  onUpdate({ ...task, dueDate: date || null })
+                }
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
+        );
+      case "collaborators":
+        return (
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className={`w-full justify-start p-0 ${theme === "light" ? "text-gray-700 hover:text-gray-900" : "text-[#9CA6AF] hover:text-white"}`}
+              >
+                {task.collaborators.length > 0 ? (
+                  <div className="flex -space-x-2">
+                    {task.collaborators.map((collaborator) => (
+                      <Avatar
+                        key={collaborator.id}
+                        className="h-6 w-6 border-2 border-[#1E1F21]"
+                      >
+                        <AvatarImage
+                          alt={collaborator.name}
+                          src={collaborator.avatar}
+                        />
+                        <AvatarFallback>
+                          {collaborator.name.charAt(0)}
+                        </AvatarFallback>
+                      </Avatar>
+                    ))}
+                  </div>
+                ) : (
+                  <span>Unassigned</span>
+                )}
+                <Users className="ml-auto h-4 w-4 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[200px] p-0">
+              <Command>
+                <CommandInput placeholder="Search collaborators..." />
+                <CommandEmpty>No collaborators found.</CommandEmpty>
+                <CommandGroup>
+                  {collaborators.map((collaborator) => (
+                    <CommandItem
+                      key={collaborator.id}
+                      onSelect={() => {
+                        const updatedCollaborators = task.collaborators.some(
+                          (c) => c.id === collaborator.id,
+                        )
+                          ? task.collaborators.filter(
+                              (c) => c.id !== collaborator.id,
+                            )
+                          : [...task.collaborators, collaborator];
+                        onUpdate({
+                          ...task,
+                          collaborators: updatedCollaborators,
+                        });
+                      }}
+                    >
+                      <Checkbox
+                        checked={task.collaborators.some(
+                          (c) => c.id === collaborator.id,
+                        )}
+                        className="mr-2 h-4 w-4"
+                      />
+                      {collaborator.name}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </Command>
+            </PopoverContent>
+          </Popover>
+        );
+      case "project":
+        return (
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className={`w-full justify-start p-0 ${theme === "light" ? "text-gray-700 hover:text-gray-900" : "text-[#9CA6AF] hover:text-white"}`}
+              >
+                {task.project || "No project"}
+                <ChevronDown className="ml-auto h-4 w-4 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[200px] p-0">
+              <Command>
+                <CommandInput placeholder="Search projects..." />
+                <CommandEmpty>No projects found.</CommandEmpty>
+                <CommandGroup>
+                  {projects.map((project) => (
+                    <CommandItem
+                      key={project}
+                      onSelect={() => onUpdate({ ...task, project })}
+                    >
+                      {project}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </Command>
+            </PopoverContent>
+          </Popover>
+        );
+      case "isPrivate":
+        return (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onUpdate({ ...task, isPrivate: !task.isPrivate })}
+            className={`w-full justify-start p-0 ${theme === "light" ? "text-gray-700 hover:text-gray-900" : "text-[#9CA6AF] hover:text-white"}`}
+          >
+            {task.isPrivate ? "Only me" : "Public"}
+          </Button>
+        );
+      default:
+        return null;
+    }
   };
 
   return (
@@ -143,130 +354,14 @@ function SortableTask({
       style={style}
       {...attributes}
       {...listeners}
-      className="grid grid-cols-[24px_1fr_150px_150px_150px_100px] items-center gap-4 py-2 text-sm text-[#9CA6AF] hover:bg-[#2C2D2E]"
+      className={`items-center py-2 text-sm ${theme === "light" ? "text-gray-700 hover:bg-gray-100" : "text-[#9CA6AF] hover:bg-[#2C2D2E]"}`}
     >
       <Checkbox id={`task-${task.id}`} className="h-4 w-4" />
-      <label htmlFor={`task-${task.id}`} className="text-white cursor-pointer">
-        {task.title}
-      </label>
-      <Popover>
-        <PopoverTrigger asChild>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-[150px] justify-start p-0 text-[#9CA6AF] hover:text-white hover:bg-[#1e1f21]"
-          >
-            {task.dueDate ? task.dueDate.toLocaleDateString() : "No date"}
-            <Calendar className="ml-auto h-4 w-4 opacity-50" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="start">
-          <CalendarComponent
-            mode="single"
-            selected={task.dueDate || undefined}
-            onSelect={(date) => onUpdate({ ...task, dueDate: date || null })}
-            initialFocus
-          />
-        </PopoverContent>
-      </Popover>
-      <Popover>
-        <PopoverTrigger asChild>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-[150px] justify-start p-0 text-[#9CA6AF] hover:text-white hover:bg-[#1e1f21]"
-          >
-            {task.collaborators.length > 0 ? (
-              <div className="flex -space-x-2">
-                {task.collaborators.map((collaborator) => (
-                  <Avatar
-                    key={collaborator.id}
-                    className="h-6 w-6 border-2 border-[#1E1F21]"
-                  >
-                    <AvatarImage
-                      alt={collaborator.name}
-                      src={collaborator.avatar}
-                    />
-                    <AvatarFallback>
-                      {collaborator.name.charAt(0)}
-                    </AvatarFallback>
-                  </Avatar>
-                ))}
-              </div>
-            ) : (
-              <span>Unassigned</span>
-            )}
-            <Users className="ml-auto h-4 w-4 opacity-50" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-[200px] p-0">
-          <Command>
-            <CommandInput placeholder="Search collaborators..." />
-            <CommandEmpty>No collaborators found.</CommandEmpty>
-            <CommandGroup>
-              {collaborators.map((collaborator) => (
-                <CommandItem
-                  key={collaborator.id}
-                  onSelect={() => {
-                    const updatedCollaborators = task.collaborators.some(
-                      (c) => c.id === collaborator.id
-                    )
-                      ? task.collaborators.filter(
-                          (c) => c.id !== collaborator.id
-                        )
-                      : [...task.collaborators, collaborator];
-                    onUpdate({ ...task, collaborators: updatedCollaborators });
-                  }}
-                >
-                  <Checkbox
-                    checked={task.collaborators.some(
-                      (c) => c.id === collaborator.id
-                    )}
-                    className="mr-2 h-4 w-4"
-                  />
-                  {collaborator.name}
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </Command>
-        </PopoverContent>
-      </Popover>
-      <Popover>
-        <PopoverTrigger asChild>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-[150px] justify-start p-0 text-[#9CA6AF] hover:text-white hover:bg-[#1e1f21]"
-          >
-            {task.project || "No project"}
-            <ChevronDown className="ml-auto h-4 w-4 opacity-50" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-[200px] p-0">
-          <Command>
-            <CommandInput placeholder="Search projects..." />
-            <CommandEmpty>No projects found.</CommandEmpty>
-            <CommandGroup>
-              {projects.map((project) => (
-                <CommandItem
-                  key={project}
-                  onSelect={() => onUpdate({ ...task, project })}
-                >
-                  {project}
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </Command>
-        </PopoverContent>
-      </Popover>
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => onUpdate({ ...task, isPrivate: !task.isPrivate })}
-        className="w-[100px] justify-start p-0 text-[#9CA6AF] hover:text-white hover:bg-[#1e1f21]"
-      >
-        {task.isPrivate ? "Only me" : "Public"}
-      </Button>
+      {fields
+        .filter((field) => field.enabled)
+        .map((field) => (
+          <div key={field.id}>{renderField(field)}</div>
+        ))}
     </div>
   );
 }
@@ -275,15 +370,18 @@ function SortableSection({
   section,
   onDelete,
   onUpdateTasks,
+  fields,
 }: {
   section: Section;
   onDelete: (id: string) => void;
   onUpdateTasks: (sectionId: string, tasks: Task[]) => void;
+  fields: Field[];
 }) {
   const { attributes, listeners, setNodeRef, transform, transition } =
     useSortable({ id: section.id });
   const [newTaskTitle, setNewTaskTitle] = React.useState("");
   const [isAddingTask, setIsAddingTask] = React.useState(false);
+  const { theme } = useTheme();
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -308,7 +406,7 @@ function SortableSection({
 
   const handleUpdateTask = (updatedTask: Task) => {
     const updatedTasks = section.tasks.map((task) =>
-      task.id === updatedTask.id ? updatedTask : task
+      task.id === updatedTask.id ? updatedTask : task,
     );
     onUpdateTasks(section.id, updatedTasks);
   };
@@ -327,7 +425,9 @@ function SortableSection({
 
   return (
     <div ref={setNodeRef} style={style} className="group mb-4">
-      <div className="flex items-center gap-2 text-[#9CA6AF] mb-2">
+      <div
+        className={`flex items-center gap-2 ${theme === "light" ? "text-gray-700" : "text-[#9CA6AF]"} mb-2`}
+      >
         <button
           {...attributes}
           {...listeners}
@@ -359,10 +459,13 @@ function SortableSection({
               <span className="sr-only">Open menu</span>
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="bg-black">
+          <DropdownMenuContent
+            align="end"
+            className={theme === "light" ? "bg-white" : "bg-black"}
+          >
             <DropdownMenuItem
               onSelect={() => onDelete(section.id)}
-              className="text-white"
+              className={theme === "light" ? "text-gray-700" : "text-white"}
             >
               Delete section
             </DropdownMenuItem>
@@ -385,12 +488,16 @@ function SortableSection({
                   key={task.id}
                   task={task}
                   onUpdate={handleUpdateTask}
+                  fields={fields}
                 />
               ))}
             </SortableContext>
           </DndContext>
           {isAddingTask ? (
-            <div className="grid grid-cols-[24px_1fr_150px_150px_150px_100px] items-center gap-4 py-2 text-sm">
+            <div
+              className={`grid items-center gap-4 py-2 text-sm ${theme === "light" ? "text-gray-700" : "text-[#9CA6AF]"}`}
+              style={{ gridTemplateColumns: getGridTemplateColumns(fields) }}
+            >
               <Checkbox className="h-4 w-4" />
               <Input
                 autoFocus
@@ -398,12 +505,12 @@ function SortableSection({
                 value={newTaskTitle}
                 onChange={(e) => setNewTaskTitle(e.target.value)}
                 onKeyDown={handleAddTask}
-                className="h-8 bg-transparent border-none text-white placeholder:text-[#9CA6AF] focus-visible:ring-0 focus-visible:ring-offset-0 p-0"
+                className={`h-8 bg-transparent border-none ${theme === "light" ? "text-gray-900" : "text-white"} placeholder:${theme === "light" ? "text-gray-500" : "text-[#9CA6AF]"} focus-visible:ring-0 focus-visible:ring-offset-0 p-0`}
               />
             </div>
           ) : (
             <button
-              className="flex items-center gap-2 text-[#9CA6AF] hover:text-white transition-colors py-2"
+              className={`flex items-center gap-2 ${theme === "light" ? "text-gray-700 hover:text-gray-900" : "text-[#9CA6AF] hover:text-white"} transition-colors py-2`}
               onClick={() => setIsAddingTask(true)}
             >
               <Plus className="h-4 w-4" />
@@ -412,6 +519,24 @@ function SortableSection({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function TaskHeader({ fields }: { fields: Field[] }) {
+  const { theme } = useTheme();
+
+  return (
+    <div
+      className={`grid gap-4 border-b p-4 text-sm ${theme === "light" ? "border-gray-200 text-gray-700" : "border-[#424244] text-gray-100"}`}
+      style={{ gridTemplateColumns: getGridTemplateColumns(fields) }}
+    >
+      <div></div>
+      {fields
+        .filter((field) => field.enabled)
+        .map((field) => (
+          <div key={field.id}>{field.name}</div>
+        ))}
     </div>
   );
 }
@@ -442,13 +567,14 @@ function DashboardContent() {
   const [sections, setSections] = React.useState<Section[]>([]);
   const [isAddingSection, setIsAddingSection] = React.useState(false);
   const [newSectionTitle, setNewSectionTitle] = React.useState("");
+  const [fields, setFields] = React.useState<Field[]>(initialFields);
   const { theme } = useTheme();
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
         distance: 8,
       },
-    })
+    }),
   );
 
   function handleDragEnd(event: DragEndEvent) {
@@ -457,10 +583,10 @@ function DashboardContent() {
     if (over && active.id !== over.id) {
       setSections((sections) => {
         const oldIndex = sections.findIndex(
-          (section) => section.id === active.id
+          (section) => section.id === active.id,
         );
         const newIndex = sections.findIndex(
-          (section) => section.id === over.id
+          (section) => section.id === over.id,
         );
 
         return arrayMove(sections, oldIndex, newIndex);
@@ -475,8 +601,8 @@ function DashboardContent() {
   const handleUpdateTasks = (sectionId: string, tasks: Task[]) => {
     setSections((prev) =>
       prev.map((section) =>
-        section.id === sectionId ? { ...section, tasks } : section
-      )
+        section.id === sectionId ? { ...section, tasks } : section,
+      ),
     );
   };
 
@@ -510,7 +636,7 @@ function DashboardContent() {
   const [isAddingProject, setIsAddingProject] = React.useState(false);
   const [newProjectName, setNewProjectName] = React.useState("");
   const [editingProjectId, setEditingProjectId] = React.useState<string | null>(
-    null
+    null,
   );
   const [editingProjectName, setEditingProjectName] = React.useState("");
 
@@ -532,15 +658,15 @@ function DashboardContent() {
 
   const handleEditProjectSubmit = (
     e: React.KeyboardEvent<HTMLInputElement>,
-    projectId: string
+    projectId: string,
   ) => {
     if (e.key === "Enter" && editingProjectName.trim()) {
       setProjects((prevProjects) =>
         prevProjects.map((project) =>
           project.id === projectId
             ? { ...project, name: editingProjectName }
-            : project
-        )
+            : project,
+        ),
       );
       setEditingProjectId(null);
       setEditingProjectName("");
@@ -555,56 +681,11 @@ function DashboardContent() {
 
   const toggleSidebar = () => setIsSidebarOpen((prev) => !prev);
 
-  const [fields, setFields] = React.useState<FieldOption[]>([
-    {
-      id: "visibility",
-      name: "Task visibility",
-      icon: <Eye className="h-5 w-5" />,
-      enabled: true,
-    },
-    {
-      id: "dueDate",
-      name: "Due date",
-      icon: <Calendar className="h-5 w-5" />,
-      enabled: true,
-    },
-    // {
-    //   id: "collaborators",
-    //   name: "Collaborators",
-    //   icon: <User className="h-5 w-5" />,
-    //   enabled: true,
-    // },
-    // {
-    //   id: "createdBy",
-    //   name: "Created by",
-    //   icon: <User className="h-5 w-5" />,
-    //   enabled: true,
-    // },
-    {
-      id: "createdOn",
-      name: "Created on",
-      icon: <Clock className="h-5 w-5" />,
-      enabled: true,
-    },
-    {
-      id: "modifiedOn",
-      name: "Last modified on",
-      icon: <Pencil className="h-5 w-5" />,
-      enabled: true,
-    },
-    {
-      id: "completedOn",
-      name: "Completed on",
-      icon: <CheckCircle2 className="h-5 w-5" />,
-      enabled: true,
-    },
-  ]);
-
   const toggleField = (id: string) => {
     setFields(
       fields.map((field) =>
-        field.id === id ? { ...field, enabled: !field.enabled } : field
-      )
+        field.id === id ? { ...field, enabled: !field.enabled } : field,
+      ),
     );
   };
 
@@ -619,10 +700,10 @@ function DashboardContent() {
       <div
         className={`
           ${isSidebarOpen ? "block" : "hidden"} w-64 border-r ${
-          theme === "light"
-            ? "border-gray-200 bg-gray-100"
-            : "border-[#424244] bg-[#2e2e30]"
-        }`}
+            theme === "light"
+              ? "border-gray-200 bg-gray-100"
+              : "border-[#424244] bg-[#2e2e30]"
+          }`}
       >
         <div className="flex h-14 items-center border-b border-[#424244] px-4">
           <Link
@@ -637,7 +718,7 @@ function DashboardContent() {
         </div>
         <div
           className={`flex flex-col ${
-            theme === "light" ? "text-black" : "text-black"
+            theme === "light" ? "text-gray-700" : "text-gray-100"
           } gap-1 p-4`}
         >
           <Button
@@ -653,9 +734,6 @@ function DashboardContent() {
           <Button
             className={`justify-start ${
               theme === "light" ? "text-gray-700" : "text-gray-100"
-            }`}
-            className={`justify-start ${
-              theme === "light" ? "text-gray-700" : "text-white"
             }`}
             variant="ghost"
             onClick={() => setCurrentPage(2)}
@@ -674,13 +752,13 @@ function DashboardContent() {
             Inbox
           </Button>
           <Separator
-            className={`my-2 justify-start ${
-              theme === "light" ? "text-gray-700" : "text-gray-100"
+            className={`my-2 ${
+              theme === "light" ? "bg-gray-200" : "bg-[#424244]"
             }`}
           />
           <div
             className={`flex items-center justify-between ${
-              theme === "light" ? "text-black" : "text-white"
+              theme === "light" ? "text-gray-900" : "text-white"
             } px-2 py-1 text-sm font-semibold `}
           >
             Projects
@@ -704,14 +782,14 @@ function DashboardContent() {
               <div
                 key={project.id}
                 className={`flex items-center ${
-                  theme === "light" ? "text-black" : "text-gray-100"
+                  theme === "light" ? "text-gray-900" : "text-gray-100"
                 } gap-2`}
               >
                 {editingProjectId === project.id ? (
                   <Input
                     autoFocus
                     className={`${
-                      theme === "light" ? "text-black" : "text-white"
+                      theme === "light" ? "text-gray-900" : "text-white"
                     } bg-transparent`}
                     value={editingProjectName}
                     onChange={(e) => setEditingProjectName(e.target.value)}
@@ -721,7 +799,7 @@ function DashboardContent() {
                 ) : (
                   <Button
                     className={`justify-start ${
-                      theme === "light" ? "text-black" : "text-gray-100"
+                      theme === "light" ? "text-gray-900" : "text-gray-100"
                     } w-full`}
                     variant="ghost"
                     onClick={() => {
@@ -743,7 +821,7 @@ function DashboardContent() {
             {isAddingProject && (
               <Input
                 autoFocus
-                className="bg-transparent text-white"
+                className={`bg-transparent ${theme === "light" ? "text-gray-900" : "text-white"}`}
                 placeholder="Project name"
                 value={newProjectName}
                 onChange={(e) => setNewProjectName(e.target.value)}
@@ -801,7 +879,7 @@ function DashboardContent() {
                 <DropdownMenuItem>
                   <Sparkles className="mr-2 h-4 w-4" />
                   Add tasks via AI
-                  <span className="ml-2 rounded bg-purple-100 px-1.5 py-0.5 text-xs font-medium text-purple-600">
+                  <span className="ml-2 rounded bg-purple-100 px-1 py-1 text-xs font-medium text-purple-600">
                     BETA
                   </span>
                 </DropdownMenuItem>
@@ -822,7 +900,7 @@ function DashboardContent() {
             <div className="flex w-full items-center gap-2">
               <Input
                 autoFocus
-                className="h-8 bg-transparent border rounded-full w-full text-white placeholder:text-[#9CA6AF] focus-visible:ring-0 focus-visible:ring-offset-0"
+                className={`h-8 bg-transparent border rounded-full w-full ${theme === "light" ? "text-gray-900" : "text-white"} placeholder:${theme === "light" ? "text-gray-500" : "text-[#9CA6AF]"} focus-visible:ring-0 focus-visible:ring-offset-0`}
                 placeholder="Search tasks..."
               />
             </div>
@@ -892,7 +970,7 @@ function DashboardContent() {
             >
               <Button
                 variant="ghost"
-                className={theme === "light" ? "text-black" : "text-white"}
+                className={theme === "light" ? "text-gray-900" : "text-white"}
               >
                 List
               </Button>
@@ -997,20 +1075,7 @@ function DashboardContent() {
                 </Sheet>
               </div>
             </div>
-            <div
-              className={` grid grid-cols-[24px_1fr_150px_150px_150px_100px] gap-4 border-b ${
-                theme === "light" ? "border-gray-200" : "border-[#424244]"
-              } p-4 text-sm ${
-                theme === "light" ? "text-gray-700" : "text-gray-100"
-              }`}
-            >
-              <div></div>
-              <div>Task name</div>
-              <div>Due date</div>
-              <div>Collaborators</div>
-              <div>Projects</div>
-              <div>Task visibility</div>
-            </div>
+            <TaskList />
             <ScrollArea className="flex-1">
               <div className="p-4">
                 <DndContext
@@ -1028,6 +1093,7 @@ function DashboardContent() {
                         section={section}
                         onDelete={handleDeleteSection}
                         onUpdateTasks={handleUpdateTasks}
+                        fields={fields}
                       />
                     ))}
                   </SortableContext>
@@ -1036,7 +1102,7 @@ function DashboardContent() {
                   <div className="pl-6">
                     <Input
                       autoFocus
-                      className="h-8 w-64 bg-transparent border-none text-white placeholder:text-[#9CA6AF] focus-visible:ring-0 focus-visible:ring-offset-0"
+                      className={`h-8 w-64 bg-transparent border-none ${theme === "light" ? "text-gray-900" : "text-white"} placeholder:${theme === "light" ? "text-gray-500" : "text-[#9CA6AF]"} focus-visible:ring-0 focus-visible:ring-offset-0`}
                       placeholder="Section name"
                       value={newSectionTitle}
                       onChange={(e) => setNewSectionTitle(e.target.value)}
@@ -1046,7 +1112,7 @@ function DashboardContent() {
                   </div>
                 ) : (
                   <button
-                    className="flex items-center gap-2 pl-6 text-[#9CA6AF] hover:text-white transition-colors"
+                    className={`flex items-center gap-2 pl-6 ${theme === "light" ? "text-gray-700 hover:text-gray-900" : "text-[#9CA6AF] hover:text-white"} transition-colors`}
                     onClick={() => setIsAddingSection(true)}
                   >
                     <Plus className="h-4 w-4" />
